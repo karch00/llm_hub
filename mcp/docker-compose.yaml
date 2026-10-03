@@ -26,7 +26,6 @@ services:
     security_opt: ["no-new-privileges:true"]
     volumes:
       - ./sandbox-data/memories:/data/memories
-      - ./sandbox-data/persistent:/data/persistent
     tmpfs:
       - /data/temporary:size=2048m
     networks: [sandbox]

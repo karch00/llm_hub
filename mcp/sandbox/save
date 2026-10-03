@@ -1,23 +1,60 @@
 #!/bin/bash
-# usage: save [-a] <temporary|persistent|memories> <path.md> [text...]   (or text on stdin)
-append=0; [[ $1 == -a ]] && { append=1; shift; }
+# usage: save [-a] [-n] <temporary|memories> <path.md> [text...]   (text as args, stdin or heredoc)
+append=0; newok=0
+
+similar() { local d; for d in $(ls "$1" 2>/dev/null); do
+  [[ $d != "$2" && $(tr -d '_.-' <<<"$d") == $(tr -d '_.-' <<<"$2") ]] && { echo "$d"; return; }
+done; }
+
+while [[ $1 == -* ]]; do
+  case $1 in -a) append=1;; -n) newok=1;; *) echo "error: unknown flag $1 (use -a append, -n allow new category)"; exit 1;; esac
+  shift
+done
+
 area=$1; rel=$2
-case $area in temporary|persistent|memories) ;; *) echo "area must be temporary|persistent|memories"; exit 1;; esac
-[[ -n $rel ]] || { echo "missing path"; exit 1; }
+case $area in temporary|memories) ;; *) echo "error: area must be temporary or memories"; exit 1;; esac
+[[ -n $rel ]] || { echo "error: missing path"; exit 1; }
 shift 2
 if (( $# )); then content="$*"; else content=$(cat); fi
+
 content=$(printf '%s\n' "$content" | grep -v '^<!-- saved [0-9-]* -->$')
-[[ -n $content ]] || { echo "empty content: pass the text as a quoted third argument, or as a heredoc (<<'EOF' ... EOF with EOF alone at the start of its own line)"; exit 1; }
-[[ ${#content} -le 6000 ]] || { echo "too long (${#content} chars, max 6000): condense it"; exit 1; }
+[[ -n $content ]] || { echo "error: empty content. Give the text as a quoted argument or a heredoc (<<'EOF', text, then EOF alone at the start of a line)"; exit 1; }
+[[ ${#content} -le 6000 ]] || { echo "error: too long (${#content} chars, max 6000): condense it"; exit 1; }
+
+sid=""
 if [[ $area == temporary && $rel == new/* ]]; then
   sid="$(date +%y%m%d-%H%M)-$(head -c3 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   rel="$sid/${rel#new/}"
-  echo "session id: $sid  (reuse it for every temporary save in this chat)"
 fi
 [[ $rel =~ ^[a-z0-9][a-z0-9._/-]*\.md$ && $rel != *..* && $rel != *//* ]] \
-  || { echo "bad path: lowercase a-z 0-9 . _ - / only, must end in .md"; exit 1; }
-[[ $(awk -F/ '{print NF}' <<<"$rel") -le 4 ]] || { echo "max 4 path parts"; exit 1; }
-f="/data/$area/$rel"; mkdir -p "$(dirname "$f")"
+  || { echo "error: bad path. Use lowercase a-z 0-9 . _ - / only, ending in .md"; exit 1; }
+n=$(awk -F/ '{print NF}' <<<"$rel")
+if [[ $area == temporary ]]; then
+  [[ $n -eq 2 ]] || { echo "error: temporary path must be <session id>/<name>.md (first save: new/<name>.md)"; exit 1; }
+  [[ -n $sid || -d /data/temporary/${rel%%/*} ]] \
+    || { echo "error: unknown session id '${rel%%/*}'. First save in a chat: new/<name>.md, then reuse the id it prints"; exit 1; }
+else
+  [[ $n -ge 3 && $n -le 4 ]] || { echo "error: memories path must be <category>/<subcategory>/<name>.md"; exit 1; }
+  cat=${rel%%/*}; sub=$(cut -d/ -f2 <<<"$rel")
+  if (( ! newok )) && [[ ! -d /data/memories/$cat/$sub ]]; then
+    if [[ ! -d /data/memories/$cat ]]; then
+      echo "error: category '$cat' does not exist. Existing: $(ls /data/memories | tr '\n' ' ')(end). Reuse one, or add -n to create a new category."
+    else
+      echo "error: subcategory '$sub' does not exist in '$cat'. Existing: $(ls /data/memories/$cat | tr '\n' ' ')(end). Reuse one, or add -n to create it."
+    fi
+    exit 1
+  fi
+
+  s=""
+  if [[ ! -d /data/memories/$cat ]]; then s=$(similar /data/memories "$cat")
+  elif [[ ! -d /data/memories/$cat/$sub ]]; then s=$(similar "/data/memories/$cat" "$sub"); fi
+  [[ -n $s ]] && { echo "error: new name is too similar to existing '$s'. Use '$s'."; exit 1; }
+fi
+
+f="/data/$area/$rel"; mkdir -p "$(dirname "$f")" || exit 1
 if (( append )); then printf '\n%s\n' "$content" >> "$f"; else printf '%s\n' "$content" > "$f"; fi
+
 printf '<!-- saved %s -->\n' "$(date +%F)" >> "$f"
+[[ -n $sid ]] && echo "session id: $sid (use it for every temporary save in this chat)"
 echo "saved /data/$area/$rel ($(wc -c < "$f") bytes)"
+exit 0

@@ -4,5 +4,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && python3 -m venv /opt/mcp && /opt/mcp/bin/pip install "mcp<2" 
 COPY server.py /opt/server.py
 COPY save /usr/local/bin/save
-CMD ["/opt/mcp/bin/python", "/opt/server.py"]
 RUN chmod +x /usr/local/bin/save
+CMD ["/opt/mcp/bin/python", "/opt/server.py"]
