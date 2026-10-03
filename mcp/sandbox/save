@@ -1,25 +1,40 @@
 #!/bin/bash
-# usage: save [-a] [-n] <temporary|memories> <path.md> [text...]   (text as args, stdin or heredoc)
-append=0; newok=0
-
+# usage: save [-a] [-n] <temporary|memories> <path.md> [text...]   |   save --reindex
+reindex() {
+  local out=/data/memories/index.md f d
+  { echo "# memory index: path | summary | saved"
+    while IFS= read -r f; do
+      d=$(tail -n1 "$f" | grep -o '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}')
+      echo "${f#/data/memories/} | $(head -n1 "$f" | sed 's/^# *//') | $d"
+    done < <(find /data/memories -name '*.md' ! -name index.md | sort)
+  } > "$out.tmp" && mv "$out.tmp" "$out"
+}
 similar() { local d; for d in $(ls "$1" 2>/dev/null); do
   [[ $d != "$2" && $(tr -d '_.-' <<<"$d") == $(tr -d '_.-' <<<"$2") ]] && { echo "$d"; return; }
 done; }
 
+append=0; newok=0
 while [[ $1 == -* ]]; do
-  case $1 in -a) append=1;; -n) newok=1;; *) echo "error: unknown flag $1 (use -a append, -n allow new category)"; exit 1;; esac
+  case $1 in
+    -a) append=1;; -n) newok=1;;
+    --reindex) reindex; echo "reindexed"; exit 0;;
+    *) echo "error: unknown flag $1 (use -a append, -n allow new category)"; exit 1;;
+  esac
   shift
 done
-
 area=$1; rel=$2
 case $area in temporary|memories) ;; *) echo "error: area must be temporary or memories"; exit 1;; esac
 [[ -n $rel ]] || { echo "error: missing path"; exit 1; }
 shift 2
 if (( $# )); then content="$*"; else content=$(cat); fi
-
 content=$(printf '%s\n' "$content" | grep -v '^<!-- saved [0-9-]* -->$')
 [[ -n $content ]] || { echo "error: empty content. Give the text as a quoted argument or a heredoc (<<'EOF', text, then EOF alone at the start of a line)"; exit 1; }
 [[ ${#content} -le 6000 ]] || { echo "error: too long (${#content} chars, max 6000): condense it"; exit 1; }
+if (( ! append )); then
+  first=$(head -n1 <<<"$content"); re='^# [^:]+: .+'
+  [[ $first =~ $re && ${#first} -le 160 ]] \
+    || { echo "error: line 1 must be '# title: one-line summary' (max 160 chars), followed by the details"; exit 1; }
+fi
 
 sid=""
 if [[ $area == temporary && $rel == new/* ]]; then
@@ -38,23 +53,21 @@ else
   cat=${rel%%/*}; sub=$(cut -d/ -f2 <<<"$rel")
   if (( ! newok )) && [[ ! -d /data/memories/$cat/$sub ]]; then
     if [[ ! -d /data/memories/$cat ]]; then
-      echo "error: category '$cat' does not exist. Existing: $(ls /data/memories | tr '\n' ' ')(end). Reuse one, or add -n to create a new category."
+      echo "error: category '$cat' does not exist. Existing: $(find /data/memories -mindepth 1 -maxdepth 1 -type d -printf '%f ')(end). Reuse one, or add -n to create a new category."
     else
       echo "error: subcategory '$sub' does not exist in '$cat'. Existing: $(ls /data/memories/$cat | tr '\n' ' ')(end). Reuse one, or add -n to create it."
     fi
     exit 1
   fi
-
   s=""
   if [[ ! -d /data/memories/$cat ]]; then s=$(similar /data/memories "$cat")
   elif [[ ! -d /data/memories/$cat/$sub ]]; then s=$(similar "/data/memories/$cat" "$sub"); fi
   [[ -n $s ]] && { echo "error: new name is too similar to existing '$s'. Use '$s'."; exit 1; }
 fi
-
 f="/data/$area/$rel"; mkdir -p "$(dirname "$f")" || exit 1
 if (( append )); then printf '\n%s\n' "$content" >> "$f"; else printf '%s\n' "$content" > "$f"; fi
-
 printf '<!-- saved %s -->\n' "$(date +%F)" >> "$f"
+[[ $area == memories ]] && reindex
 [[ -n $sid ]] && echo "session id: $sid (use it for every temporary save in this chat)"
 echo "saved /data/$area/$rel ($(wc -c < "$f") bytes)"
 exit 0
