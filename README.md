@@ -13,8 +13,8 @@ Alongside some neat features, for now:
 executing a task and processing it/reasoning by having the synthesized result of the previous task saved on a file.
 
 Hardware tested (assuming base OS is Linux debian-based):
-    - i7 10700KF
-    - 32GB DDR4 3200MT/s
-    - RTX 3080 10GB
+- i7 10700KF
+- 32GB DDR4 3200MT/s
+- RTX 3080 10GB
 
 
