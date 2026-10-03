@@ -1,0 +1,23 @@
+#!/bin/bash
+# usage: save [-a] <temporary|persistent|memories> <path.md> [text...]   (or text on stdin)
+append=0; [[ $1 == -a ]] && { append=1; shift; }
+area=$1; rel=$2
+case $area in temporary|persistent|memories) ;; *) echo "area must be temporary|persistent|memories"; exit 1;; esac
+[[ -n $rel ]] || { echo "missing path"; exit 1; }
+shift 2
+if (( $# )); then content="$*"; else content=$(cat); fi
+content=$(printf '%s\n' "$content" | grep -v '^<!-- saved [0-9-]* -->$')
+[[ -n $content ]] || { echo "empty content: pass the text as a quoted third argument, or as a heredoc (<<'EOF' ... EOF with EOF alone at the start of its own line)"; exit 1; }
+[[ ${#content} -le 6000 ]] || { echo "too long (${#content} chars, max 6000): condense it"; exit 1; }
+if [[ $area == temporary && $rel == new/* ]]; then
+  sid="$(date +%y%m%d-%H%M)-$(head -c3 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  rel="$sid/${rel#new/}"
+  echo "session id: $sid  (reuse it for every temporary save in this chat)"
+fi
+[[ $rel =~ ^[a-z0-9][a-z0-9._/-]*\.md$ && $rel != *..* && $rel != *//* ]] \
+  || { echo "bad path: lowercase a-z 0-9 . _ - / only, must end in .md"; exit 1; }
+[[ $(awk -F/ '{print NF}' <<<"$rel") -le 4 ]] || { echo "max 4 path parts"; exit 1; }
+f="/data/$area/$rel"; mkdir -p "$(dirname "$f")"
+if (( append )); then printf '\n%s\n' "$content" >> "$f"; else printf '%s\n' "$content" > "$f"; fi
+printf '<!-- saved %s -->\n' "$(date +%F)" >> "$f"
+echo "saved /data/$area/$rel ($(wc -c < "$f") bytes)"
