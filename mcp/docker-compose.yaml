@@ -1,35 +1,58 @@
 services:
   searxng:
     image: searxng/searxng
-    volumes: ["./searxng:/etc/searxng"]
-    networks: [tools]
-    dns: [1.1.1.1, 9.9.9.9]
+    volumes: 
+      - ./searxng:/etc/searxng
+    networks: 
+      - tools
+    dns: 
+      - 1.1.1.1
+      - 9.9.9.9
   search-mcp:
     image: python:3.12-slim
     command: sh -c "pip install -q 'mcp<2' httpx trafilatura && python /app/search.py"
-    volumes: ["./search.py:/app/search.py:ro"]
-    ports: ["127.0.0.1:8001:8001"]
-    networks: [tools]
+    volumes: 
+      - ./tools/search.py:/app/search.py:ro
+    ports:
+      - "127.0.0.1:8001:8001"
+    networks: 
+      - tools
   playwright:
     image: mcr.microsoft.com/playwright/mcp
     command: ["--headless","--browser","chromium","--no-sandbox","--port","8002","--host","0.0.0.0"]
     shm_size: 1gb
-    ports: ["127.0.0.1:8002:8002"]
-    networks: [tools]
-    dns: [1.1.1.1, 9.9.9.9]
+    ports: 
+      - "127.0.0.1:8002:8002"
+    networks: 
+      - tools
+    dns: 
+      - 1.1.1.1
+      - 9.9.9.9
+  memory-mcp:
+    image: python:3.12-slim
+    command: sh -c "pip install -q 'mcp<2' && python /app/memory.py"
+    volumes:
+      - ./tools/memory.py:/app/memory.py:ro
+      - ./sandbox-data/memories:/data/memories
+    ports: 
+      - "127.0.0.1:8004:8004"
+    networks: 
+      - tools
   sandbox:
     build: ./sandbox
-    ports: ["127.0.0.1:8003:8003"]
-    mem_limit: 8g
+    ports: 
+      - "127.0.0.1:8003:8003"
+    mem_limit: 4g
     cpus: 4
     pids_limit: 512
     security_opt: ["no-new-privileges:true"]
     volumes:
-      - ./sandbox-data/memories:/data/memories
-    tmpfs:
-      - /data/temporary:size=2048m
-    networks: [sandbox]
-    dns: [1.1.1.1, 9.9.9.9]
+      - ./sandbox-data/out:/out
+    networks: 
+      - sandbox
+    dns: 
+      - 1.1.1.1
+      - 9.9.9.9
 networks:
   tools:   { ipam: { config: [{ subnet: 172.30.1.0/24 }] } }
   sandbox: { ipam: { config: [{ subnet: 172.30.2.0/24 }] } }
