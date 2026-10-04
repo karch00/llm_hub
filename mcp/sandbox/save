@@ -1,11 +1,13 @@
 #!/bin/bash
 # usage: save [-a] [-n] <temporary|memories> <path.md> [text...]   |   save --reindex
+
+[[ ${rel##*/} != index.md ]] || { echo "error: index.md is a reserved name"; exit 1; }
 reindex() {
   local out=/data/memories/index.md f d
   { echo "# memory index: path | summary | saved"
     while IFS= read -r f; do
       d=$(tail -n1 "$f" | grep -o '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}')
-      echo "${f#/data/memories/} | $(head -n1 "$f" | sed 's/^# *//') | $d"
+      echo "${f#/data/memories/} | $(grep -m1 . "$f" | sed 's/^# *//') | $d"
     done < <(find /data/memories -name '*.md' ! -name index.md | sort)
   } > "$out.tmp" && mv "$out.tmp" "$out"
 }
@@ -26,14 +28,22 @@ area=$1; rel=$2
 case $area in temporary|memories) ;; *) echo "error: area must be temporary or memories"; exit 1;; esac
 [[ -n $rel ]] || { echo "error: missing path"; exit 1; }
 shift 2
+if (( append )); then
+  [[ -s /data/$area/$rel ]] || append=0   # nothing to append to: create instead (line-1 rule applies)
+fi
 if (( $# )); then content="$*"; else content=$(cat); fi
-content=$(printf '%s\n' "$content" | grep -v '^<!-- saved [0-9-]* -->$')
+content=$(printf '%s\n' "$content" | grep -v '^<!-- saved [0-9-]* -->$' | sed '/./,$!d')
 [[ -n $content ]] || { echo "error: empty content. Give the text as a quoted argument or a heredoc (<<'EOF', text, then EOF alone at the start of a line)"; exit 1; }
 [[ ${#content} -le 6000 ]] || { echo "error: too long (${#content} chars, max 6000): condense it"; exit 1; }
 if (( ! append )); then
   first=$(head -n1 <<<"$content"); re='^# [^:]+: .+'
   [[ $first =~ $re && ${#first} -le 160 ]] \
     || { echo "error: line 1 must be '# title: one-line summary' (max 160 chars), followed by the details"; exit 1; }
+  if [[ $area == memories && -s /data/memories/$rel ]]; then
+    old=$(grep -m1 . "/data/memories/$rel" | sed 's/^# *//; s/:.*//')
+    new=${first#\# }; new=${new%%:*}
+    [[ -z $old || $old == "$new" ]] || { echo "error: this note is titled '$old'. Replacing it under a different title ('$new') looks like unrelated content. Keep the title '$old', or save the new topic in its own note at a different path."; exit 1; }
+  fi
 fi
 
 sid=""
@@ -43,6 +53,7 @@ if [[ $area == temporary && $rel == new/* ]]; then
 fi
 [[ $rel =~ ^[a-z0-9][a-z0-9._/-]*\.md$ && $rel != *..* && $rel != *//* ]] \
   || { echo "error: bad path. Use lowercase a-z 0-9 . _ - / only, ending in .md"; exit 1; }
+[[ ${rel##*/} != index.md ]] || { echo "error: index.md is generated automatically after every memories save. Never write it. Your note is already saved; you are done."; exit 1; }
 n=$(awk -F/ '{print NF}' <<<"$rel")
 if [[ $area == temporary ]]; then
   [[ $n -eq 2 ]] || { echo "error: temporary path must be <session id>/<name>.md (first save: new/<name>.md)"; exit 1; }
