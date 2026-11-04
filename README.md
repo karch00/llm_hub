@@ -8,8 +8,10 @@ Uses llama.cpp as server alongside some docker services + python scripts for MCP
 3. Isolated sandbox environment for draft generation, code execution, etc.
 4. Memory-managing MCP server for user information saved in categories
 
-Alongside some neat features, for now:
+Some neat features, for now:
 1. Memories: persistent saving of memories on the sandbox for future uses on other sessions / across models
+
+Master prompt thought out to be general, used on barebones llama.cpp server as no per-model prompt is possible.
 
 Hardware tested (assuming base OS is Linux debian-based):
 - i7 10700KF
