@@ -10,7 +10,9 @@ JOURNALS = "/data/journals"
 def create_journal(user_entry: str, model_reflexion: str, overwrite: bool = False) -> str:
     """
     Create a journal with the initial main user entry and your final reflexion at the end of the exchange.
-    Entry and Reflexion must be entered respecting: 1. Formatting: Max 80 characters per line; 2. Input form: User or Model inputted newlines.
+    Entry and Reflexion must be entered respecting newlines with these rules:
+        1. All-round Formatting: Max 80 characters per line.
+        2. Inputted Formatting: Preserve the original formatting on top of the 80 characters per line.
     If journal already exists, prompt the user for overwrite confirmation.
     """
     today = datetime.today().strftime("%Y-%m-%d")
