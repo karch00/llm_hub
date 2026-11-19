@@ -14,8 +14,6 @@ Some neat features, for now:
 2. Journaling: Simple journaling methods, first prompt as User entry followed by conversation with insight and finished off with
 the model's synthesis of all.
 
-Master prompt thought out to be general, used on barebones llama.cpp server as no per-model prompt is possible.
-
 Hardware tested (assuming base OS is Linux debian-based):
 - i7 10700KF
 - 32GB DDR4 3200MT/s
