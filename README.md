@@ -2,14 +2,17 @@
 
 This repo is dedicated to store the configs and implementations of my personal LLM hub.
 
-Uses llama.cpp as server alongside some docker services + python scripts for MCP, notably:
-1. Searxng + python script for custom MCP tool
+Uses ollama as server alongside openwebui as UI and some docker services + python scripts for MCP, notably:
+1. Searxng for engine queries
 2. Playwright for website fetch
 3. Isolated sandbox environment for draft generation, code execution, etc.
 4. Memory-managing MCP server for user information saved in categories
+5. Journaling MCP server, described below
 
 Some neat features, for now:
 1. Memories: persistent saving of memories on the sandbox for future uses on other sessions / across models
+2. Journaling: Simple journaling methods, first prompt as User entry followed by conversation with insight and finished off with
+the model's synthesis of all.
 
 Master prompt thought out to be general, used on barebones llama.cpp server as no per-model prompt is possible.
 
