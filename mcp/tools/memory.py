@@ -71,7 +71,7 @@ def memory_replace(path: str, line_number: int, new_content: str = "") -> str:
     Replaces should be few and used only when strictly necessary. Example: Specific Information changed due to recent events.
     `path`: the Category/Topic. Example: path="people/John"
     `line_number`: line number to replace from the content. Example: 3
-    `new_content`: The content that will replace the content of the current line. Do not include the line number here. If ommited, line number will be erased
+    `new_content`: The content that will replace the content of the current line, do not include the line number here. If ommited, line will be erased.
     """
     mempath = f"{ROOT}/{path}.md"
 
