@@ -3,7 +3,7 @@ from mcp.server.fastmcp import FastMCP
 import os
 
 os.umask(0)
-mcp = FastMCP("sandbox", host="0.0.0.0", port=8003)
+mcp = FastMCP("sandbox", host="0.0.0.0", port=8003, stateless_http=True, json_response=True)
 
 @mcp.tool()
 def run_shell(command: str, timeout: int = 60) -> str:

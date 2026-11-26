@@ -2,7 +2,7 @@ import os, pathlib
 from datetime import datetime
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("memory", host="0.0.0.0", port=8004)
+mcp = FastMCP("memory", host="0.0.0.0", port=8004, stateless_http=True, json_response=True)
 ROOT = "/data/memories"
 INDEX = f"{ROOT}/index.md"
 

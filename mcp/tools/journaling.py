@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-mcp = FastMCP("journal", host="0.0.0.0", port=8005)
+mcp = FastMCP("journal", host="0.0.0.0", port=8005, stateless_http=True, json_response=True)
 JOURNALS = "/data/journals"
 
 @mcp.tool()
