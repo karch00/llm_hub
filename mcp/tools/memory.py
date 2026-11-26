@@ -3,8 +3,7 @@ from datetime import datetime
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("memory", host="0.0.0.0", port=8004)
-###ROOT = "/data/memories"
-ROOT = ".tests"
+ROOT = "/data/memories"
 INDEX = f"{ROOT}/index.md"
 
 # General tools
@@ -140,4 +139,4 @@ def memory_delete(path: str) -> str:
     return "Memory deleted succesfully"
 
 reindex()
-###mcp.run(transport="streamable-http")
+mcp.run(transport="streamable-http")
