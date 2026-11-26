@@ -1,127 +1,143 @@
-import re, datetime, pathlib
+import os, pathlib
+from datetime import datetime
 from mcp.server.fastmcp import FastMCP
 
-ROOT = pathlib.Path("/data/memories")
 mcp = FastMCP("memory", host="0.0.0.0", port=8004)
+###ROOT = "/data/memories"
+ROOT = ".tests"
+INDEX = f"{ROOT}/index.md"
 
-SECRET = re.compile(
-    r"password|passwd|passphrase|secret|api[ _-]?key|private key|access token|auth token"
-    r"|bearer |-----BEGIN|\b\d{1,3}(\.\d{1,3}){3}\b|[A-Za-z0-9+=_]{32,}", re.I)
-REFUSED = ("REFUSED: looks like a secret, password, key or IP address. Never store those. "
-           "Do not retry; tell the user it was not stored.")
-
-def clean(s): return re.sub(r"password managers?", "", s, flags=re.I)
-def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
-def squash(s): return s.replace("-", "").rstrip("s")
-def bullet(l): l = l.strip().lstrip("-").strip(); return f"- {l}"
-
-def match(existing, name):
-    """Reuse an existing name that differs only by hyphens or a plural s."""
-    for e in existing:
-        if e != name and squash(e) == squash(name):
-            return e
-    return name
-
-def locate(category, topic):
-    c, t = slug(category), slug(topic)
-    if not c or not t:
-        return c, t, None
-    cats = [d.name for d in ROOT.iterdir() if d.is_dir()] if ROOT.exists() else []
-    c = match(cats, c)
-    topics = [f.stem for f in (ROOT / c).glob("*.md")] if (ROOT / c).is_dir() else []
-    t = match(topics, t)
-    return c, t, ROOT / c / f"{t}.md"
-
+# General tools
 def reindex():
-    ROOT.mkdir(parents=True, exist_ok=True)
-    rows = []
-    for f in sorted(ROOT.glob("*/*.md")):
-        first = (f.read_text().splitlines() or [""])[0]
-        day = datetime.date.fromtimestamp(f.stat().st_mtime)
-        rows.append(f"{f.parent.name}/{f.stem} | {first} | {day}")
-    (ROOT / "index.md").write_text(
-        "# memory index: category/topic | summary | updated\n" + "\n".join(rows) + "\n")
+    if not pathlib.Path(INDEX).exists():
+        dirpath = "/".join(INDEX.split("/")[:-1])
 
+        if not os.path.isdir(dirpath):
+            os.makedirs(dirpath)
+
+        with open(INDEX, mode="x+", encoding="utf-8") as f:
+            f.write("# Category/Topic | Summary | Created | Updated")
+
+# MCP tools
 @mcp.tool()
 def memory_read(path: str = "index") -> str:
-    """Read the memory index (default) or one note, e.g. "homelab/network"."""
-    if path in ("", "index"):
-        f = ROOT / "index.md"
-        return f.read_text() if f.exists() else "(memory is empty)"
-    cat, _, topic = path.strip("/").removesuffix(".md").partition("/")
-    _, _, f = locate(cat, topic)
-    return f.read_text() if f and f.exists() else "(no such note: check the index)"
+    """Reads the contents of a memory.
+    By default reads index. Always call first to have necessary information about indexed memories.
+    `path`: the Category/Topic column of a memory that has been read in the index beforehand.
+    """
+    if path == "index":
+        mempath = INDEX
+    else:
+        mempath = f"{ROOT}/{path}.md"
+
+    if not pathlib.Path(mempath).exists():
+        return f"{path} does not exist"
+
+    with open(mempath, mode="r", encoding="utf-8") as f:
+        return f.read()
 
 @mcp.tool()
-def memory_save(category: str, topic: str, summary: str, details: str) -> str:
-    """Create a NEW note about the user (use memory_update for an existing note).
-    category: broad area (environment, homelab, preferences). topic: the note's single subject (os, answer-style).
-    summary: one-line label of what the note covers, not the facts. details: the facts, one per line."""
-    if SECRET.search(clean(f"{summary}\n{details}")):
-        return REFUSED
-    c, t, f = locate(category, topic)
-    if f is None:
-        return "ERROR: category and topic need letters or digits."
-    if "\n" in summary.strip() or len(summary) > 150 or not summary.strip():
-        return "ERROR: summary must be one line, max 150 characters."
-    body = "\n".join(bullet(l) for l in details.splitlines() if l.strip())
-    if not body or len(body) > 3000:
-        return "ERROR: details must be 1-3000 characters."
-    if f.exists():
-        return f"EXISTS: {c}/{t} already exists. Change it with memory_update."
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(f"{summary.strip()}\n{body}\n")
-    reindex()
-    moved = f" (mapped from {slug(category)}/{slug(topic)})" if (c, t) != (slug(category), slug(topic)) else ""
-    return f"saved {c}/{t}{moved}"
+def memory_create(path: str, summary: str, content: str) -> str:
+    """Creates a memory.
+    `path`: the Category/Topic. Example: path="setup/computer"
+    `summary`: the summary of the contents inside. Keep it short, under 100-120 characters, one line.
+    `content`: the content to write separated by \n. Example: "Intel CPU\nNvidia GPU\nDual monitor"
+    """
+    mempath = f"{ROOT}/{path}.md"
+    dirpath = "/".join(mempath.split("/")[:-1])
+
+    if not os.path.isdir(dirpath):
+        os.makedirs(dirpath)
+    if pathlib.Path(mempath).exists():
+        return f"{path} already exists. Check existing contents and either:\n1.reconsider new category if changes are substantial\nor\n2.ask user for memory replace/update with changes"
+
+    # Create content list to write lines
+    content_list = ["# Summary", summary, "# Contents"]
+    for n, line in enumerate(content.split("\n"), start=1):
+        content_list.append(f"{n}. {line}")
+        n += 1
+
+    # Write File
+    with open(mempath, mode="x+", encoding="utf-8") as f:
+        f.write("\n".join(content_list))
+
+    # Update index
+    with open(INDEX, mode="a", encoding="utf-8") as f:
+        f.write(f"\n{path} | {summary} | {datetime.now().strftime("%Y-%m-%d")} | {datetime.now().strftime("%Y-%m-%d")}")
+    return "Succesfully created memory"
 
 @mcp.tool()
-def memory_update(category: str, topic: str, find: str = "", replace: str = "", summary: str = "") -> str:
-    """Change ONE line of an existing note. find: distinctive words of the line to change ("" to add a line).
-    replace: the new line ("" to remove the matched line). summary: new one-line label (optional)."""
-    if SECRET.search(clean(f"{replace}\n{summary}")):
-        return REFUSED
-    c, t, f = locate(category, topic)
-    if f is None or not f.exists():
-        return "no such note: check the index, or create it with memory_save."
-    if "\n" in replace.strip() or "\n" in summary.strip() or len(summary) > 150:
-        return "ERROR: replace and summary must be a single line (summary max 150 characters)."
-    if not (find.strip() or replace.strip() or summary.strip()):
-        return "ERROR: nothing to change."
-    lines = f.read_text().splitlines()
-    head, body = lines[0], lines[1:]
-    if summary.strip():
-        head = summary.strip()
-    if find.strip():
-        hits = [i for i, l in enumerate(body) if find.strip().lower() in l.lower()]
-        if not hits:
-            return "ERROR: no line contains that text. Current note:\n" + "\n".join(lines)
-        if len(hits) > 1:
-            return "ERROR: several lines match; use more specific text:\n" + "\n".join(body[i] for i in hits)
-        if replace.strip():
-            body[hits[0]] = bullet(replace)
-        else:
-            del body[hits[0]]
-    elif replace.strip():
-        if bullet(replace) in body:
-            return "already present"
-        body.append(bullet(replace))
-    out = "\n".join([head] + body) + "\n"
-    if len(out) > 3000:
-        return "ERROR: note would exceed 3000 characters; remove or shorten a line first."
-    f.write_text(out)
-    reindex()
-    return f"updated {c}/{t}"
+def memory_replace(path: str, line_number: int, new_content: str = "") -> str:
+    """Replaces a memory line.
+    Replaces should be few and used only when strictly necessary. Example: Specific Information changed due to recent events.
+    `path`: the Category/Topic. Example: path="people/John"
+    `line_number`: line number to replace from the content. Example: 3
+    `new_content`: The content that will replace the content of the current line. Do not include the line number here. If ommited, line number will be erased
+    """
+    mempath = f"{ROOT}/{path}.md"
+
+    if not pathlib.Path(mempath).exists():
+       return f"{path} does not exist"
+    if line_number < 1:
+        return "Line must be >=1"
+
+    # Line bias at 2 since line indexes 0, 1 and 2 are # Summary, (summary) and # Contents
+    real_line_n = line_number + 2
+    with open(mempath, "r+", encoding="utf-8") as f:
+       lines = f.readlines()
+       if real_line_n > len(lines)-1:
+           return "Line number over the number of existing lines"
+
+       if not new_content: # Erase line
+           lines.pop(line_number+2) # Pop targetted line
+           for n, line in enumerate(lines[3:], start=1): # Re-index content lines
+               lines[n+2] = f"{n}. {line[3:]}"
+       else:
+           lines[real_line_n] = f"{line_number}. {new_content}\n"
+
+       # Overwrite and truncate possible leftovers
+       f.seek(0)
+       f.writelines(lines)
+       f.truncate()
+
+    return "Line updated succesfully"
 
 @mcp.tool()
-def memory_delete(category: str, topic: str) -> str:
-    """Delete a note, only when the user asks to forget it."""
-    _, _, f = locate(category, topic)
-    if not f or not f.exists():
-        return "no such note"
-    f.unlink()
-    reindex()
-    return "deleted"
+def memory_append(path: str, new_line: str) -> str:
+    """Appends a line to the memory.
+    Appends should be few and used only when strictly necessary. Example: New unkown information that is not infered from other present facts.
+    `path`: the Category/Topic. Example: path="hobbies/videogames"
+    `new_line`: the line to append. Example: new_line="Really likes Dwarf Fortress"
+    """
+    mempath = f"{ROOT}/{path}.md"
+    if not pathlib.Path(mempath).exists():
+       return f"{path} does not exist"
+
+    with open(mempath, mode="a+", encoding="utf-8") as f:
+        f.seek(0)
+        next_line_n = len(f.readlines()) - 2 # Line bias
+        f.write(f"\n{next_line_n}. {new_line}")
+
+    return "Line appended succesfully"
+
+@mcp.tool()
+def memory_delete(path: str) -> str:
+    """Delete a memory, only when the user asks to forget it. Ask for confirmation before deleting.
+    `path`: the Category/Topic. Example: path="projects/mcp_hub"
+    """
+    mempath = f"{ROOT}/{path}.md"
+    if not pathlib.Path(mempath).exists():
+       return f"{path} does not exist"
+
+    # Remove file and from index
+    os.remove(mempath)
+    with open(INDEX, mode="r+", encoding="utf-8") as f:
+        lines = [l for l in f.readlines() if path not in l]
+        f.seek(0)
+        f.write("\n".join(lines))
+        f.truncate()
+
+    return "Memory deleted succesfully"
 
 reindex()
-mcp.run(transport="streamable-http")
+###mcp.run(transport="streamable-http")
